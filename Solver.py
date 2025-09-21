@@ -1,10 +1,12 @@
 
 import numpy, random, os
+import copy
 
 if os.name == 'nt':
 	os.system('cls')
 elif os.name == 'posix':
 	os.system('clear')
+
 
 def RandomizeRanks():
 	"""
@@ -17,7 +19,7 @@ def RandomizeRanks():
 	return ranks
      
 class Puzzle:
-	def __init__(self, matrix=None):
+	def __init__(self, matrix=None, g=0, h=0, parent=None, goalPuzzle=None):
 		"""
 		Initializes a Puzzle object with the given matrix.
 		If the given matrix is invalid, it will raise a ValueError.
@@ -39,8 +41,22 @@ class Puzzle:
 			
 			self.PuzzleRandomize()
 
-		indices = numpy.argwhere(self.matrix == -1)
-		self.spacePosition = tuple(indices[0]) # finds the position of the space (-1)
+		self.positions = {}
+		self.parent = parent
+
+		for i, j in numpy.ndindex(self.matrix.shape):
+			self.positions[matrix[i, j]] = (i, j)
+
+		if(parent is not None):
+			self.g = 1 + parent.g
+			self.h = 0
+		else:
+			self.g = 0
+
+		if(goalPuzzle is not None):
+			self.h = self.AccumulatedManhattanDistance(goalPuzzle)
+		else:
+			self.h = 0
 
 	def Display(self):
 		print(self.matrix)
@@ -64,19 +80,43 @@ class Puzzle:
 		If newPosition is out of bounds, it does nothing.
 		"""
 		row, col = newPosition
-		spaceRow, spaceCol = self.spacePosition
+		spaceRow, spaceCol = self.positions[-1]
 
 		if(row > 2 or row < 0 or col > 2 or col < 0):
 			return
-		
+
+		self.positions[-1], self.positions[self.matrix[row, col]] = newPosition, self.positions[-1]
 		self.matrix[row, col], self.matrix[spaceRow, spaceCol] = self.matrix[spaceRow, spaceCol], self.matrix[row, col]
-		self.spacePosition = newPosition 
+	
+	def IsExpandableToRight(self):
+		_, col = self.positions[-1]
+		if col == 2:
+			return False
+		return True
+
+	def IsExpandableToLeft(self):
+		_, col = self.positions[-1]
+		if col == 0:
+			return False
+		return True
+
+	def IsExpandableToUp(self):
+		row, _ = self.positions[-1]
+		if row == 0:
+			return False
+		return True
+
+	def IsExpandableToDown(self):
+		row, _ = self.positions[-1]
+		if row == 2:
+			return False
+		return True
 
 	def Up(self):
 		"""
 		Moves the space one row up if possible.
 		"""
-		row, col = self.spacePosition
+		row, col = self.positions[-1]
 		newPosition = ((row - 1, col))
 		self.Exchange(newPosition = newPosition)
 
@@ -84,7 +124,7 @@ class Puzzle:
 		"""
 		Moves the space one row down if possible.
 		"""
-		row, col = self.spacePosition
+		row, col = self.positions[-1]
 		newPosition = ((row + 1, col))
 		self.Exchange(newPosition = newPosition)
 
@@ -92,7 +132,7 @@ class Puzzle:
 		"""
 		Moves the space one column to the left if possible.
 		"""
-		row, col = self.spacePosition
+		row, col = self.positions[-1]
 		newPosition = ((row, col - 1))
 		self.Exchange(newPosition = newPosition)
 
@@ -100,11 +140,23 @@ class Puzzle:
 		"""
 		Moves the space one column to the right if possible.
 		"""
-		row, col = self.spacePosition
+		row, col = self.positions[-1]
 		newPosition = ((row, col + 1))
 		self.Exchange(newPosition = newPosition)
 
+	def AccumulatedManhattanDistance(self, goalPuzzle):
+		accumulatedManhattanDistance = 0
 
+		for number, coordinates in goalPuzzle.positions:
+			goalPuzzleRow, goalPuzzleCol = coordinates
+			puzzleRow, puzzleColumn = self.positions[number]
+
+			accumulatedManhattanDistance += abs(goalPuzzleRow - puzzleRow) + abs(goalPuzzleCol - puzzleColumn)
+		
+		return accumulatedManhattanDistance
+
+def FindSolution(originPuzzle, goalPuzzle):
+	print("")
 
 
 
@@ -113,6 +165,7 @@ mic = numpy.array([[1, 2, 3],
 				   [6, 7, 8]])
 
 matrix = Puzzle(mic)
+matrix.Display()
 matrix.Up()
 matrix.Up()
 matrix.Left()
