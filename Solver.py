@@ -1,6 +1,5 @@
 
-import numpy, random, os
-import copy
+import numpy, random, os, copy
 
 if os.name == 'nt':
 	os.system('cls')
@@ -19,7 +18,7 @@ def RandomizeRanks():
 	return ranks
      
 class Puzzle:
-	def __init__(self, matrix=None, g=0, h=0, parent=None, goalPuzzle=None):
+	def __init__(self, matrix=None, parent=None, goalPuzzle=None):
 		"""
 		Initializes a Puzzle object with the given matrix.
 		If the given matrix is invalid, it will raise a ValueError.
@@ -43,20 +42,28 @@ class Puzzle:
 
 		self.positions = {}
 		self.parent = parent
+		self.goalPuzzle = goalPuzzle
 
 		for i, j in numpy.ndindex(self.matrix.shape):
 			self.positions[matrix[i, j]] = (i, j)
 
 		if(parent is not None):
 			self.g = 1 + parent.g
-			self.h = 0
 		else:
 			self.g = 0
 
 		if(goalPuzzle is not None):
-			self.h = self.AccumulatedManhattanDistance(goalPuzzle)
+			self.h = self.AccumulatedManhattanDistance()
 		else:
 			self.h = 0
+	
+	def __eq__(self, otherPuzzle):
+		if not hasattr(otherPuzzle, "matrix"):
+			return NotImplemented
+		return numpy.array_equal(self.matrix, otherPuzzle.matrix)
+
+	def __lt__(self, otherPuzzle):
+		return (self.g + self.h) < (otherPuzzle.g + otherPuzzle.h)
 
 	def Display(self):
 		print(self.matrix)
@@ -84,6 +91,12 @@ class Puzzle:
 
 		if(row > 2 or row < 0 or col > 2 or col < 0):
 			return
+
+		contributionOfOldCoordinates = abs(row - self.goalPuzzle.positions[self.matrix[row, col]][0]) + abs(col - self.goalPuzzle.positions[self.matrix[row, col]][1])
+		contributionOfNewCoordinates = abs(row - self.goalPuzzle.positions[self.matrix[spaceRow, spaceCol]][0]) + abs(col - self.goalPuzzle.positions[self.matrix[spaceRow, spaceCol]][1])
+		if(goalPuzzle is not None):
+			self.h += -contributionOfOldCoordinates + contributionOfNewCoordinates
+
 
 		self.positions[-1], self.positions[self.matrix[row, col]] = newPosition, self.positions[-1]
 		self.matrix[row, col], self.matrix[spaceRow, spaceCol] = self.matrix[spaceRow, spaceCol], self.matrix[row, col]
@@ -144,10 +157,10 @@ class Puzzle:
 		newPosition = ((row, col + 1))
 		self.Exchange(newPosition = newPosition)
 
-	def AccumulatedManhattanDistance(self, goalPuzzle):
+	def AccumulatedManhattanDistance(self):
 		accumulatedManhattanDistance = 0
 
-		for number, coordinates in goalPuzzle.positions:
+		for number, coordinates in self.goalPuzzle.positions.items():
 			goalPuzzleRow, goalPuzzleCol = coordinates
 			puzzleRow, puzzleColumn = self.positions[number]
 
@@ -160,19 +173,27 @@ def FindSolution(originPuzzle, goalPuzzle):
 
 
 
-mic = numpy.array([[1, 2, 3],
+goalLayout = numpy.array([[1, 2, 3],
 				   [4, -1, 5],
 				   [6, 7, 8]])
 
-matrix = Puzzle(mic)
-matrix.Display()
-matrix.Up()
-matrix.Up()
-matrix.Left()
-matrix.Display()
-matrix.Right()
-matrix.Right()
-matrix.Right()
-matrix.Right()
-matrix.Down()
-matrix.Display()
+goalPuzzle = Puzzle(matrix=goalLayout)
+originLayout = numpy.array([[8, 7, 6],
+				   [5, -1, 4],
+				   [3, 2, 1]])
+
+goalPuzzle = Puzzle(matrix=goalLayout)
+originPuzzle = Puzzle(matrix=originLayout, goalPuzzle=goalPuzzle)
+
+
+goalPuzzle.Display()
+originPuzzle.Display()
+
+
+if originPuzzle.IsExpandableToRight():
+	childOne = Puzzle(matrix=copy.deepcopy(originPuzzle.matrix), parent=originPuzzle, goalPuzzle=goalPuzzle)
+	childOne.Right()
+	childOne.Display()
+	print(childOne.h)
+	print(childOne == originPuzzle)
+
