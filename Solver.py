@@ -1,5 +1,5 @@
 
-import numpy, random, os, copy
+import numpy, random, os, copy, heapq
 
 if os.name == 'nt':
 	os.system('cls')
@@ -45,7 +45,7 @@ class Puzzle:
 		self.goalPuzzle = goalPuzzle
 
 		for i, j in numpy.ndindex(self.matrix.shape):
-			self.positions[matrix[i, j]] = (i, j)
+			self.positions[int(self.matrix[i, j])] = (i, j)  #int to remove the numpy wrapper
 
 		if(parent is not None):
 			self.g = 1 + parent.g
@@ -64,6 +64,9 @@ class Puzzle:
 
 	def __lt__(self, otherPuzzle):
 		return (self.g + self.h) < (otherPuzzle.g + otherPuzzle.h)
+
+	def __hash__(self): #for set lookup use plain array of layout as key
+		return hash(tuple(int(x) for x in self.matrix.ravel()))
 
 	def Display(self):
 		print(self.matrix)
@@ -92,14 +95,11 @@ class Puzzle:
 		if(row > 2 or row < 0 or col > 2 or col < 0):
 			return
 
-		contributionOfOldCoordinates = abs(row - self.goalPuzzle.positions[self.matrix[row, col]][0]) + abs(col - self.goalPuzzle.positions[self.matrix[row, col]][1])
-		contributionOfNewCoordinates = abs(row - self.goalPuzzle.positions[self.matrix[spaceRow, spaceCol]][0]) + abs(col - self.goalPuzzle.positions[self.matrix[spaceRow, spaceCol]][1])
-		if(goalPuzzle is not None):
-			self.h += -contributionOfOldCoordinates + contributionOfNewCoordinates
-
-
-		self.positions[-1], self.positions[self.matrix[row, col]] = newPosition, self.positions[-1]
+		self.positions[-1], self.positions[int(self.matrix[row, col])] = newPosition, self.positions[-1]
 		self.matrix[row, col], self.matrix[spaceRow, spaceCol] = self.matrix[spaceRow, spaceCol], self.matrix[row, col]
+
+		if self.goalPuzzle is not None:
+			self.h = self.AccumulatedManhattanDistance()
 	
 	def IsExpandableToRight(self):
 		_, col = self.positions[-1]
@@ -169,31 +169,71 @@ class Puzzle:
 		return accumulatedManhattanDistance
 
 def FindSolution(originPuzzle, goalPuzzle):
-	print("")
+	priorityQueue = []
+	exploredPuzzles = set()
+
+	heapq.heappush(priorityQueue, originPuzzle)
+
+	while priorityQueue: #While not empty
+		#Get best f(v) evaluation
+		currentBestPuzzle = heapq.heappop(priorityQueue)
+
+		if(currentBestPuzzle == goalPuzzle):
+			return currentBestPuzzle
+
+		if currentBestPuzzle.IsExpandableToRight():
+			rightChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(), parent=currentBestPuzzle, goalPuzzle=goalPuzzle)
+			rightChild.Right()
+
+			if(rightChild not in exploredPuzzles):
+				heapq.heappush(priorityQueue, rightChild)
+
+		if currentBestPuzzle.IsExpandableToLeft():
+			leftChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(), parent=currentBestPuzzle, goalPuzzle=goalPuzzle)
+			leftChild.Left()
+
+			if(leftChild not in exploredPuzzles):
+				heapq.heappush(priorityQueue, leftChild)
+
+		if currentBestPuzzle.IsExpandableToUp():
+			upChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(), parent=currentBestPuzzle, goalPuzzle=goalPuzzle)
+			upChild.Up()
+
+			if(upChild not in exploredPuzzles):
+				heapq.heappush(priorityQueue, upChild)
+
+		if currentBestPuzzle.IsExpandableToDown():
+			downChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(), parent=currentBestPuzzle, goalPuzzle=goalPuzzle)
+			downChild.Down()
+
+			if(downChild not in exploredPuzzles):
+				heapq.heappush(priorityQueue, downChild)
+				
+		exploredPuzzles.add(currentBestPuzzle)
+
+	if len(priorityQueue) == 0:
+		return None #No solution
 
 
 
 goalLayout = numpy.array([[1, 2, 3],
-				   [4, -1, 5],
-				   [6, 7, 8]])
+				   		  [8, -1, 4],
+				   		  [7, 6, 5]])
 
-goalPuzzle = Puzzle(matrix=goalLayout)
-originLayout = numpy.array([[8, 7, 6],
-				   [5, -1, 4],
-				   [3, 2, 1]])
+originLayout = numpy.array([[2, 1, 6],
+				   			[4, -1, 8],
+				  	 		[7, 5, 3]])
+							#pag 93
 
 goalPuzzle = Puzzle(matrix=goalLayout)
 originPuzzle = Puzzle(matrix=originLayout, goalPuzzle=goalPuzzle)
 
 
+#goalPuzzle.Display()
 goalPuzzle.Display()
-originPuzzle.Display()
-
-
-if originPuzzle.IsExpandableToRight():
-	childOne = Puzzle(matrix=copy.deepcopy(originPuzzle.matrix), parent=originPuzzle, goalPuzzle=goalPuzzle)
-	childOne.Right()
-	childOne.Display()
-	print(childOne.h)
-	print(childOne == originPuzzle)
-
+print("\n")
+solution = FindSolution(originPuzzle = originPuzzle, goalPuzzle = goalPuzzle)
+if solution is not None:
+	solution.Display()
+else:
+	print("No solution")
