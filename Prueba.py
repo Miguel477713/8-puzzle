@@ -24,11 +24,10 @@ def RandomizeRanks():
 
 class Puzzle:
     # Class attributes for search statistics
-    open_states = 0
-    expanded_states = 0
     HEURISTIC_WEIGHT = 1
 
     def __init__(self, matrix=None, parent=None, goalPuzzle=None):
+
         """
         Initializes a Puzzle object with the given matrix.
         If the given matrix is invalid, it will raise a ValueError.
@@ -338,4 +337,4 @@ print(f"Q (Expanded states): {sizeQ}")
 
 end_time = time()
 print("Execution time:", end_time - start_time)
-print("-" * 20)
+print("-"*20)
