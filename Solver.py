@@ -211,8 +211,7 @@ def FindSolution(originPuzzle, goalPuzzle):
 				
 		exploredPuzzles.add(currentBestPuzzle)
 
-	if len(priorityQueue) == 0:
-		return None #No solution
+	return None #No solution
 
 
 
@@ -230,10 +229,15 @@ originPuzzle = Puzzle(matrix=originLayout, goalPuzzle=goalPuzzle)
 
 
 #goalPuzzle.Display()
-goalPuzzle.Display()
+originPuzzle.Display()
+print("\n")
 print("\n")
 solution = FindSolution(originPuzzle = originPuzzle, goalPuzzle = goalPuzzle)
 if solution is not None:
-	solution.Display()
+	temp = solution
+	while temp is not None:
+		temp.Display()
+		print("\n")
+		temp = temp.parent
 else:
 	print("No solution")
