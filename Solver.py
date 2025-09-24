@@ -1,12 +1,13 @@
 
 import numpy, random, os, copy, heapq
+from time import time
 
 if os.name == 'nt':
 	os.system('cls')
 elif os.name == 'posix':
 	os.system('clear')
 
-
+start_time = time()
 def RandomizeRanks():
 	"""
 	Shuffles the list of numbers from 1 to 8 and -1.
@@ -18,7 +19,11 @@ def RandomizeRanks():
 	return ranks
      
 class Puzzle:
-	def __init__(self, matrix=None, parent=None, goalPuzzle=None):
+	# Class attributes for search statistics
+	open_states = 0
+	expanded_states = 0
+
+	def __init__(self, matrix=None, parent=None, goalPuzzle=None, last_move=None, heuristic_weight=1.0):
 		"""
 		Initializes a Puzzle object with the given matrix.
 		If the given matrix is invalid, it will raise a ValueError.
@@ -43,6 +48,9 @@ class Puzzle:
 		self.positions = {}
 		self.parent = parent
 		self.goalPuzzle = goalPuzzle
+		self.heuristic_weight = heuristic_weight
+
+		self.last_move = last_move  # 'up', 'down', 'left', 'right', or None for initial state
 
 		for i, j in numpy.ndindex(self.matrix.shape):
 			self.positions[int(self.matrix[i, j])] = (i, j)  #int to remove the numpy wrapper
@@ -63,7 +71,7 @@ class Puzzle:
 		return numpy.array_equal(self.matrix, otherPuzzle.matrix)
 
 	def __lt__(self, otherPuzzle):
-		return (self.g + self.h) < (otherPuzzle.g + otherPuzzle.h)
+		return (self.g + self.heuristic_weight * self.h) < (otherPuzzle.g + otherPuzzle.heuristic_weight * otherPuzzle.h)
 
 	def __hash__(self): #for set lookup use plain array of layout as key
 		return hash(tuple(int(x) for x in self.matrix.ravel()))
@@ -126,36 +134,40 @@ class Puzzle:
 		return True
 
 	def Up(self):
-		"""
-		Moves the space one row up if possible.
-		"""
-		row, col = self.positions[-1]
-		newPosition = ((row - 1, col))
-		self.Exchange(newPosition = newPosition)
+		if self.IsExpandableToUp():
+			row, col = self.positions[-1]
+			newPosition = ((row - 1, col))
+			self.Exchange(newPosition=newPosition)
+			self.last_move = 'up'
+			return True
+		return False
 
 	def Down(self):
-		"""
-		Moves the space one row down if possible.
-		"""
-		row, col = self.positions[-1]
-		newPosition = ((row + 1, col))
-		self.Exchange(newPosition = newPosition)
+		if self.IsExpandableToDown():
+			row, col = self.positions[-1]
+			newPosition = ((row + 1, col))
+			self.Exchange(newPosition=newPosition)
+			self.last_move = 'down'
+			return True
+		return False
 
 	def Left(self):
-		"""
-		Moves the space one column to the left if possible.
-		"""
-		row, col = self.positions[-1]
-		newPosition = ((row, col - 1))
-		self.Exchange(newPosition = newPosition)
+		if self.IsExpandableToLeft():
+			row, col = self.positions[-1]
+			newPosition = ((row, col - 1))
+			self.Exchange(newPosition=newPosition)
+			self.last_move = 'left'
+			return True
+		return False
 
 	def Right(self):
-		"""
-		Moves the space one column to the right if possible.
-		"""
-		row, col = self.positions[-1]
-		newPosition = ((row, col + 1))
-		self.Exchange(newPosition = newPosition)
+		if self.IsExpandableToRight():
+			row, col = self.positions[-1]
+			newPosition = ((row, col + 1))
+			self.Exchange(newPosition=newPosition)
+			self.last_move = 'right'
+			return True
+		return False
 
 	def AccumulatedManhattanDistance(self):
 		accumulatedManhattanDistance = 0
@@ -168,51 +180,85 @@ class Puzzle:
 		
 		return accumulatedManhattanDistance
 
-def FindSolution(originPuzzle, goalPuzzle):
-	priorityQueue = []
-	exploredPuzzles = set()
+	def getSolutionPath(self):
+		path = []
+		current = self
+		while current is not None:
+			path.append((current, current.last_move))
+			current = current.parent
+		return path[::-1]  # Reverse to get start->goal order, backtracking
+		
+	def getMoveSequence(self):
+		"""Returns a list of moves from start to this state"""
+		moves = []
+		current = self
+		while current is not None and current.last_move is not None:
+			moves.append(current.last_move)
+			current = current.parent
+		return moves[::-1]  # Return moves in correct order (start to goal)
 
-	heapq.heappush(priorityQueue, originPuzzle)
+def FindSolution(originPuzzle, goalPuzzle, heuristic_weight=1.0):
+    # Reset search statistics
+    Puzzle.open_states = 0
+    Puzzle.expanded_states = 0
+    
+    priorityQueue = []
+    exploredPuzzles = set()
+    
+    heapq.heappush(priorityQueue, originPuzzle)
 
-	while priorityQueue: #While not empty
-		#Get best f(v) evaluation
-		currentBestPuzzle = heapq.heappop(priorityQueue)
+    while priorityQueue:
+        # Update search statistics
+        Puzzle.open_states = len(priorityQueue)  # P: Current number of open states
+        currentBestPuzzle = heapq.heappop(priorityQueue)
+        Puzzle.expanded_states += 1  # Q: Increment expanded states counter
 
-		if(currentBestPuzzle == goalPuzzle):
-			return currentBestPuzzle
+        if currentBestPuzzle == goalPuzzle:
+            return currentBestPuzzle.getSolutionPath()
 
-		if currentBestPuzzle.IsExpandableToRight():
-			rightChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(), parent=currentBestPuzzle, goalPuzzle=goalPuzzle)
-			rightChild.Right()
+        # Right move
+        if currentBestPuzzle.IsExpandableToRight():
+            rightChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(),
+                              parent=currentBestPuzzle,
+                              goalPuzzle=goalPuzzle,
+                              last_move='right',
+							  heuristic_weight=heuristic_weight)
+            if rightChild.Right() and rightChild not in exploredPuzzles:
+                heapq.heappush(priorityQueue, rightChild)
 
-			if(rightChild not in exploredPuzzles):
-				heapq.heappush(priorityQueue, rightChild)
+        # Left move
+        if currentBestPuzzle.IsExpandableToLeft():
+            leftChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(),
+                             parent=currentBestPuzzle,
+                             goalPuzzle=goalPuzzle,
+                             last_move='left',
+							heuristic_weight=heuristic_weight)
+            if leftChild.Left() and leftChild not in exploredPuzzles:
+                heapq.heappush(priorityQueue, leftChild)
 
-		if currentBestPuzzle.IsExpandableToLeft():
-			leftChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(), parent=currentBestPuzzle, goalPuzzle=goalPuzzle)
-			leftChild.Left()
+        # Up move
+        if currentBestPuzzle.IsExpandableToUp():
+            upChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(),
+                           parent=currentBestPuzzle,
+                           goalPuzzle=goalPuzzle,
+                           last_move='up',
+						   heuristic_weight=heuristic_weight)
+            if upChild.Up() and upChild not in exploredPuzzles:
+                heapq.heappush(priorityQueue, upChild)
 
-			if(leftChild not in exploredPuzzles):
-				heapq.heappush(priorityQueue, leftChild)
+        # Down move
+        if currentBestPuzzle.IsExpandableToDown():
+            downChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(),
+                             parent=currentBestPuzzle,
+                             goalPuzzle=goalPuzzle,
+                             last_move='down',
+							 heuristic_weight=heuristic_weight)
+            if downChild.Down() and downChild not in exploredPuzzles:
+                heapq.heappush(priorityQueue, downChild)
 
-		if currentBestPuzzle.IsExpandableToUp():
-			upChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(), parent=currentBestPuzzle, goalPuzzle=goalPuzzle)
-			upChild.Up()
+        exploredPuzzles.add(currentBestPuzzle)
 
-			if(upChild not in exploredPuzzles):
-				heapq.heappush(priorityQueue, upChild)
-
-		if currentBestPuzzle.IsExpandableToDown():
-			downChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(), parent=currentBestPuzzle, goalPuzzle=goalPuzzle)
-			downChild.Down()
-
-			if(downChild not in exploredPuzzles):
-				heapq.heappush(priorityQueue, downChild)
-				
-		exploredPuzzles.add(currentBestPuzzle)
-
-	return None #No solution
-
+    return None  # No solution
 
 
 goalLayout = numpy.array([[1, 2, 3],
@@ -221,23 +267,47 @@ goalLayout = numpy.array([[1, 2, 3],
 
 originLayout = numpy.array([[2, 1, 6],
 				   			[4, -1, 8],
-				  	 		[7, 5, 3]])
-							#pag 93
+				  	 		[7, 5, 3]]) # pag 93
+
 
 goalPuzzle = Puzzle(matrix=goalLayout)
 originPuzzle = Puzzle(matrix=originLayout, goalPuzzle=goalPuzzle)
 
-
 #goalPuzzle.Display()
+print("-"*20)
+print("Origin Puzzle")
 originPuzzle.Display()
+print("-"*20)
+print("Goal Puzzle")
+goalPuzzle.Display()
+print("-"*20)
 print("\n")
 print("\n")
-solution = FindSolution(originPuzzle = originPuzzle, goalPuzzle = goalPuzzle)
-if solution is not None:
-	temp = solution
-	while temp is not None:
-		temp.Display()
-		print("\n")
-		temp = temp.parent
+
+solution_path = FindSolution(originPuzzle, goalPuzzle, heuristic_weight=1.5)  # Example with weight 1.5
+
+if solution_path:
+    final_state = solution_path[-1][0]
+    
+    # Print search statistics from class attributes
+    print(f"\nSearch Statistics:")
+    print(f"P (Open states): {Puzzle.open_states}")
+    print(f"Q (Expanded states): {Puzzle.expanded_states}")
+    print("-" * 20)
+    move_sequence = final_state.getMoveSequence()
+    print("Move sequence:", '-> '.join(move_sequence))
+    print("Total moves:", len(move_sequence))
+    print("\nDetailed solution:")
+    print('Heuristic Weight: ', final_state.heuristic_weight)
+
+    
+    for i, (state, move) in enumerate(solution_path):
+        print(f"Step {i}: {'Initial state' if move is None else f'Move: {move}'}")
+        state.Display()
+        print()
 else:
-	print("No solution")
+    print("No solution found")
+
+end_time = time()
+print("Execution time:", end_time - start_time)
+print("-" * 20)
