@@ -10,6 +10,7 @@ start_time = time()
 
 sizeP = 0
 sizeQ = 0
+HEURISTIC_WEIGHT = 2
 
 def RandomizeRanks():
     """
@@ -24,8 +25,6 @@ def RandomizeRanks():
 
 class Puzzle:
     # Class attributes for search statistics
-    HEURISTIC_WEIGHT = 1
-
     def __init__(self, matrix=None, parent=None, goalPuzzle=None):
 
         """
@@ -52,8 +51,6 @@ class Puzzle:
         self.positions = {}
         self.parent = parent
         self.goalPuzzle = goalPuzzle
-        # self.heuristic_weight = heuristic_weight  # Weight for the heuristic function
-
         self.last_move = None  # last_move  # 'up', 'down', 'left', 'right', or None for initial state
 
         for i, j in numpy.ndindex(self.matrix.shape):
@@ -147,55 +144,42 @@ class Puzzle:
         it returns True since it will be used later.
         :return:
         '''
-        # if self.IsExpandableToUp():
         row, col = self.positions[-1]
         newPosition = ((row - 1, col))
         self.Exchange(newPosition=newPosition)
         self.last_move = 'up'
 
-    # 	return True
-    # return False
-
     def Down(self):
-        # if self.IsExpandableToDown():
         row, col = self.positions[-1]
         newPosition = ((row + 1, col))
         self.Exchange(newPosition=newPosition)
         self.last_move = 'down'
 
-    # 	return True
-    # return False
-
     def Left(self):
-        # if self.IsExpandableToLeft():
         row, col = self.positions[-1]
         newPosition = ((row, col - 1))
         self.Exchange(newPosition=newPosition)
         self.last_move = 'left'
 
-    # 	return True
-    # return False
-
     def Right(self):
-        # if self.IsExpandableToRight():
         row, col = self.positions[-1]
         newPosition = ((row, col + 1))
         self.Exchange(newPosition=newPosition)
         self.last_move = 'right'
 
-    # 	return True
-    # return False
-
     def AccumulatedManhattanDistance(self):
         accumulatedManhattanDistance = 0
 
         for number, coordinates in self.goalPuzzle.positions.items():
+            if -1 == number:
+               continue
+
             goalPuzzleRow, goalPuzzleCol = coordinates
             puzzleRow, puzzleColumn = self.positions[number]
 
             accumulatedManhattanDistance += abs(goalPuzzleRow - puzzleRow) + abs(goalPuzzleCol - puzzleColumn)
 
-        return accumulatedManhattanDistance * Puzzle.HEURISTIC_WEIGHT
+        return accumulatedManhattanDistance * HEURISTIC_WEIGHT
 
     def getSolutionPath(self):
         path = []
@@ -226,7 +210,6 @@ def FindSolution(originPuzzle, goalPuzzle):
     while priorityQueue:
         # Update search statistics
         currentBestPuzzle = heapq.heappop(priorityQueue)
-        # sizeQ += 1  # Q: Increment expanded states counter
         if currentBestPuzzle == goalPuzzle:
             sizeP = len(priorityQueue)  # P: Current number of open states
             sizeQ = len(exploredPuzzles)
@@ -268,8 +251,6 @@ def FindSolution(originPuzzle, goalPuzzle):
             downChild = Puzzle(matrix=currentBestPuzzle.matrix.copy(),
                                parent=currentBestPuzzle,
                                goalPuzzle=goalPuzzle,
-                               # last_move='down',
-                               # heuristic_weight=heuristic_weight
                                )
             downChild.Down()
             if downChild not in exploredPuzzles:
@@ -323,7 +304,6 @@ if solution_path:
     print("Move sequence:", ' -> '.join(move_sequence))
     print("Total moves:", len(move_sequence))
     print("\nDetailed solution:")
-    print('Heuristic Weight: ', Puzzle.HEURISTIC_WEIGHT)
 
     for i, (state, move) in enumerate(solution_path):
         print(f"Step {i}: {'Initial state' if move is None else f'Move: {move}'}")
@@ -334,6 +314,7 @@ else:
 
 print(f"P (Open states): {sizeP}")
 print(f"Q (Expanded states): {sizeQ}")
+print('Heuristic Weight: ', HEURISTIC_WEIGHT)
 
 end_time = time()
 print("Execution time:", end_time - start_time)
